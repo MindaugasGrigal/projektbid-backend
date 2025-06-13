@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProjektBid OAuth Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+        }
+        h1 {
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        .subtitle {
+            opacity: 0.8;
+            margin-bottom: 40px;
+        }
+        .auth-section {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 30px;
+            margin: 20px 0;
+        }
+        .btn {
+            display: inline-block;
+            padding: 15px 30px;
+            margin: 10px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .btn-google {
+            background: #dd4b39;
+            color: white;
+        }
+        .btn-google:hover {
+            background: #c23321;
+            transform: translateY(-2px);
+        }
+        .btn-primary {
+            background: #4CAF50;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+        }
+        .form-group {
+            margin: 15px 0;
+            text-align: left;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            font-size: 16px;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            border-left: 4px solid #4CAF50;
+        }
+        .error {
+            border-left-color: #f44336;
+            background: rgba(244, 67, 54, 0.1);
+        }
+        .code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 ProjektBid OAuth Test</h1>
+        <p class="subtitle">Test the authentication system with Google OAuth and regular registration</p>
+        
+        <!-- Google OAuth Section -->
+        <div class="auth-section">
+            <h3>🚀 Google OAuth Login</h3>
+            <p>Sign in with your Google account</p>
+            <a href="/auth/google" class="btn btn-google">Sign in with Google</a>
+        </div>
+        
+        <!-- Regular Registration Section -->
+        <div class="auth-section">
+            <h3>📝 Enhanced Registration</h3>
+            <form id="registerForm">
+                <div class="form-group">
+                    <label for="name">Name:</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" required placeholder="Min 6 chars with upper, lower, and number">
+                </div>
+                <div class="form-group">
+                    <label for="role">Role:</label>
+                    <select id="role" name="role" required>
+                        <option value="">Select your role</option>
+                        <option value="CLIENT">Client (I need services)</option>
+                        <option value="PROVIDER">Provider (I offer services)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="phone">Phone (optional):</label>
+                    <input type="tel" id="phone" name="phone">
+                </div>
+                <div class="form-group">
+                    <label for="city">City (optional):</label>
+                    <input type="text" id="city" name="city">
+                </div>
+                <button type="submit" class="btn btn-primary">Register</button>
+            </form>
+        </div>
+        
+        <!-- Login Section -->
+        <div class="auth-section">
+            <h3>🔑 Login</h3>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="loginEmail">Email:</label>
+                    <input type="email" id="loginEmail" name="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password:</label>
+                    <input type="password" id="loginPassword" name="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Login</button>
+            </form>
+        </div>
+        
+        <!-- Results Section -->
+        <div id="results"></div>
+        
+        <!-- API Testing Section -->
+        <div class="auth-section">
+            <h3>🧪 API Test</h3>
+            <button onclick="testAuthStatus()" class="btn btn-primary">Check Auth Status</button>
+            <button onclick="testSearchProjects()" class="btn btn-primary">Test Search</button>
+        </div>
+    </div>
+    
+    <script>
+        // Store token globally
+        let authToken = localStorage.getItem('authToken');
+        
+        // Check URL parameters for OAuth callback
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('token')) {
+            authToken = urlParams.get('token');
+            localStorage.setItem('authToken', authToken);
+            showResult('OAuth Success! Token received and stored.', 'success');
+            
+            // Clear URL parameters
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+        
+        function showResult(message, type = 'success') {
+            const results = document.getElementById('results');
+            const className = type === 'error' ? 'result error' : 'result';
+            results.innerHTML = `<div class="${className}">${message}</div>`;
+        }
+        
+        // Registration form
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            
+            try {
+                const response = await fetch('/auth/register/enhanced', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    authToken = result.data.token;
+                    localStorage.setItem('authToken', authToken);
+                    showResult(`Registration successful! Welcome ${result.data.user.name}!<div class="code">Token: ${authToken.substring(0, 50)}...</div>`);
+                } else {
+                    showResult(`Registration failed: ${result.message || result.error}`, 'error');
+                }
+            } catch (error) {
+                showResult(`Error: ${error.message}`, 'error');
+            }
+        });
+        
+        // Login form
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            
+            try {
+                const response = await fetch('/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    authToken = result.token;
+                    localStorage.setItem('authToken', authToken);
+                    showResult(`Login successful! Welcome back ${result.user.name}!<div class="code">Token: ${authToken.substring(0, 50)}...</div>`);
+                } else {
+                    showResult(`Login failed: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showResult(`Error: ${error.message}`, 'error');
+            }
+        });
+        
+        // Test auth status
+        async function testAuthStatus() {
+            if (!authToken) {
+                showResult('No auth token found. Please login first.', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/auth/status', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showResult(`Auth Status: ${result.authenticated ? 'Authenticated' : 'Not authenticated'}<div class="code">${JSON.stringify(result.data.user, null, 2)}</div>`);
+                } else {
+                    showResult(`Auth check failed: ${result.message || result.error}`, 'error');
+                }
+            } catch (error) {
+                showResult(`Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Test search API
+        async function testSearchProjects() {
+            try {
+                const response = await fetch('/search/projects?limit=3');
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showResult(`Search API working! Found ${result.data.pagination.total} projects<div class="code">${JSON.stringify(result.data.projects.slice(0, 2), null, 2)}</div>`);
+                } else {
+                    showResult(`Search failed: ${result.message || result.error}`, 'error');
+                }
+            } catch (error) {
+                showResult(`Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Show current token status on load
+        if (authToken) {
+            showResult(`Auth token found in localStorage: ${authToken.substring(0, 50)}...`);
+        }
+    </script>
+</body>
+</html>
+

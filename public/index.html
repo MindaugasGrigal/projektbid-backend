@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProjektBid - Paslaugų aukcionas</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <i class="fas fa-hammer"></i>
+                <span>ProjektBid</span>
+            </div>
+            <div class="nav-menu" id="navMenu">
+                <a href="#" class="nav-link" onclick="showPage('home')">Pradžia</a>
+                <a href="#" class="nav-link" onclick="showPage('projects')">Projektai</a>
+                <a href="#" class="nav-link" onclick="showPage('about')">Apie mus</a>
+                <div class="nav-auth" id="navAuth">
+                    <button class="btn btn-outline" onclick="showPage('login')">Prisijungti</button>
+                    <button class="btn btn-primary" onclick="showPage('register')">Registruotis</button>
+                </div>
+                <div class="nav-user" id="navUser" style="display: none;">
+                    <div class="user-dropdown">
+                        <button class="user-btn" onclick="toggleUserMenu()">
+                            <img src="" alt="Avatar" class="user-avatar" id="userAvatar">
+                            <span id="userName">User</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <div class="dropdown-menu" id="userDropdown">
+                            <a href="#" onclick="showPage('dashboard')"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+                            <a href="#" onclick="showPage('profile')"><i class="fas fa-user"></i> Profilis</a>
+                            <a href="#" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Atsijungti</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="hamburger" id="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Home Page -->
+        <div id="homePage" class="page active">
+            <section class="hero">
+                <div class="hero-content">
+                    <h1>Raskite geriausius specialistus savo projektams</h1>
+                    <p>ProjektBid - tai paslaugų aukcionas, kur klientai gali skelbti projektus, o paslaugų teikėjai pateikti savo pasiūlymus. Geriausias pasiūlymas laimi!</p>
+                    <div class="hero-buttons">
+                        <button class="btn btn-primary btn-lg" onclick="showPage('register')">Pradėti dabar</button>
+                        <button class="btn btn-outline btn-lg" onclick="showPage('about')">Sužinoti daugiau</button>
+                    </div>
+                </div>
+                <div class="hero-stats">
+                    <div class="stat">
+                        <h3 id="activeProjectsCount">0</h3>
+                        <p>Aktyvūs projektai</p>
+                    </div>
+                    <div class="stat">
+                        <h3 id="totalProvidersCount">0</h3>
+                        <p>Paslaugų teikėjai</p>
+                    </div>
+                    <div class="stat">
+                        <h3 id="completedProjectsCount">0</h3>
+                        <p>Baigti projektai</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="features">
+                <div class="container">
+                    <h2>Kaip tai veikia?</h2>
+                    <div class="features-grid">
+                        <div class="feature">
+                            <div class="feature-icon">
+                                <i class="fas fa-project-diagram"></i>
+                            </div>
+                            <h3>1. Sukurkite projektą</h3>
+                            <p>Aprašykite savo poreikius, nustatykite biudžetą ir terminus</p>
+                        </div>
+                        <div class="feature">
+                            <div class="feature-icon">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <h3>2. Gaukite pasiūlymus</h3>
+                            <p>Paslaugų teikėjai pateiks savo pasiūlymus su kainomis ir terminais</p>
+                        </div>
+                        <div class="feature">
+                            <div class="feature-icon">
+                                <i class="fas fa-crown"></i>
+                            </div>
+                            <h3>3. Pasirinkite laimėtoją</h3>
+                            <p>Įvertinkite pasiūlymus ir pasirinkite geriausią specialistą</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Register Page -->
+        <div id="registerPage" class="page">
+            <div class="auth-container">
+                <div class="auth-card">
+                    <h2><i class="fas fa-user-plus"></i> Registracija</h2>
+                    <form id="registerForm">
+                        <div class="form-group">
+                            <label for="regName">Vardas ir pavardė *</label>
+                            <input type="text" id="regName" name="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="regEmail">El. paštas *</label>
+                            <input type="email" id="regEmail" name="email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="regPassword">Slaptažodis *</label>
+                            <input type="password" id="regPassword" name="password" required>
+                            <small>Mažiausiai 6 simboliai su didžiąja raide, mažąja raide ir skaičiumi</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="regRole">Jūsų vaidmuo *</label>
+                            <select id="regRole" name="role" required>
+                                <option value="">Pasirinkite...</option>
+                                <option value="CLIENT">Klientas (ieškau paslaugų)</option>
+                                <option value="PROVIDER">Paslaugų teikėjas (teikiu paslaugas)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="regPhone">Telefono numeris</label>
+                            <input type="tel" id="regPhone" name="phone">
+                        </div>
+                        <div class="form-group">
+                            <label for="regCity">Miestas</label>
+                            <input type="text" id="regCity" name="city">
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-full">Registruotis</button>
+                    </form>
+                    
+                    <div class="auth-divider">
+                        <span>arba</span>
+                    </div>
+                    
+                    <button class="btn btn-google btn-full" onclick="googleAuth()">
+                        <i class="fab fa-google"></i>
+                        Registruotis su Google
+                    </button>
+                    
+                    <p class="auth-switch">
+                        Jau turite paskyrą? 
+                        <a href="#" onclick="showPage('login')">Prisijunkite</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Login Page -->
+        <div id="loginPage" class="page">
+            <div class="auth-container">
+                <div class="auth-card">
+                    <h2><i class="fas fa-sign-in-alt"></i> Prisijungimas</h2>
+                    <form id="loginForm">
+                        <div class="form-group">
+                            <label for="loginEmail">El. paštas</label>
+                            <input type="email" id="loginEmail" name="email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="loginPassword">Slaptažodis</label>
+                            <input type="password" id="loginPassword" name="password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-full">Prisijungti</button>
+                    </form>
+                    
+                    <div class="auth-divider">
+                        <span>arba</span>
+                    </div>
+                    
+                    <button class="btn btn-google btn-full" onclick="googleAuth()">
+                        <i class="fab fa-google"></i>
+                        Prisijungti su Google
+                    </button>
+                    
+                    <p class="auth-switch">
+                        Neturite paskyros? 
+                        <a href="#" onclick="showPage('register')">Registruokitės</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Page -->
+        <div id="dashboardPage" class="page">
+            <div class="dashboard-container">
+                <div class="dashboard-header">
+                    <h1>Dashboard</h1>
+                    <p id="dashboardWelcome">Sveiki sugrįžę!</p>
+                </div>
+                
+                <!-- Client Dashboard -->
+                <div id="clientDashboard" class="dashboard-content">
+                    <div class="dashboard-stats">
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-project-diagram"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="clientActiveProjects">0</h3>
+                                <p>Aktyvūs projektai</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-file-alt"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="clientTotalProposals">0</h3>
+                                <p>Gauti pasiūlymai</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="clientCompletedProjects">0</h3>
+                                <p>Baigti projektai</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="dashboard-actions">
+                        <button class="btn btn-primary btn-lg" onclick="showPage('create-project')">
+                            <i class="fas fa-plus"></i> Sukurti naują projektą
+                        </button>
+                        <button class="btn btn-outline" onclick="showPage('client-projects')">
+                            <i class="fas fa-list"></i> Peržiūrėti projektus
+                        </button>
+                    </div>
+                    
+                    <div class="recent-projects">
+                        <h3>Naujausi projektai</h3>
+                        <div id="clientRecentProjects" class="projects-list">
+                            <!-- Projects will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Provider Dashboard -->
+                <div id="providerDashboard" class="dashboard-content">
+                    <div class="dashboard-stats">
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-handshake"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="providerActiveProposals">0</h3>
+                                <p>Aktyvūs pasiūlymai</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-trophy"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="providerWonProjects">0</h3>
+                                <p>Laimėti projektai</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-star"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="providerRating">0.0</h3>
+                                <p>Reitingas</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="dashboard-actions">
+                        <button class="btn btn-primary btn-lg" onclick="showPage('provider-projects')">
+                            <i class="fas fa-search"></i> Ieškoti projektų
+                        </button>
+                        <button class="btn btn-outline" onclick="showPage('portfolio')">
+                            <i class="fas fa-briefcase"></i> Mano portfolio
+                        </button>
+                    </div>
+                    
+                    <div class="recommended-projects">
+                        <h3>Rekomenduojami projektai</h3>
+                        <div id="providerRecommendedProjects" class="projects-list">
+                            <!-- Recommended projects will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Other pages will be included here -->
+        <div id="projectsPage" class="page"></div>
+        <div id="createProjectPage" class="page"></div>
+        <div id="clientProjectsPage" class="page"></div>
+        <div id="providerProjectsPage" class="page"></div>
+        <div id="profilePage" class="page"></div>
+    </main>
+
+    <!-- Notification System -->
+    <div id="notificationContainer" class="notification-container"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Kraunama...</p>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
+

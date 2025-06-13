@@ -1,0 +1,208 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String      @id @default(uuid())
+  email       String      @unique
+  name        String
+  password    String?     // Optional for OAuth users
+  role        Role
+  phone       String?
+  address     String?
+  city        String?
+  description String?     // Provider profile description
+  website     String?
+  avatar      String?     // Profile photo URL
+  verified    Boolean     @default(false)
+  rating      Float       @default(0.0)
+  totalJobs   Int         @default(0)
+  wonAuctions Int         @default(0)
+  
+  // OAuth fields
+  googleId    String?     @unique
+  provider    String?     // 'google', 'local', etc.
+  isEmailVerified Boolean @default(false)
+  
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Relations
+  projects          Project[]           @relation("ClientProjects")
+  proposals         Proposal[]          @relation("ProviderProposals")
+  wonProjects       Project[]           @relation("WonProjects")
+  portfolioItems    PortfolioItem[]
+  sentMessages      Message[]           @relation("MessageSender")
+  receivedMessages  Message[]           @relation("MessageReceiver")
+  reviews           Review[]            @relation("ReviewsReceived")
+  givenReviews      Review[]            @relation("ReviewsGiven")
+  notifications     Notification[]
+}
+
+model Project {
+  id            String        @id @default(uuid())
+  clientId      String
+  title         String
+  description   String
+  category      String
+  subcategory   String?
+  budgetMin     Int?
+  budgetMax     Int?
+  budgetRange   String
+  deadline      DateTime      // Project completion deadline
+  startDate     DateTime?     // When work should start
+  location      String?
+  city          String?
+  priority      Priority
+  status        ProjectStatus @default(WAITING)
+  phase         AuctionPhase  @default(WAITING)
+  
+  // Auction timing
+  waitingStartsAt DateTime    @default(now())     // When waiting period starts (72h)
+  auctionStartsAt DateTime                        // When auction starts (auto-calculated)
+  auctionEndsAt   DateTime                        // When auction ends (24h after start)
+  
+  // Attachments and media
+  images          String[]     @default([])
+  documents       String[]     @default([])
+  attachments     Json?        // Additional files/info
+  
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  winnerId      String?
+  
+  // Relations
+  client        User          @relation("ClientProjects", fields: [clientId], references: [id])
+  winner        User?         @relation("WonProjects", fields: [winnerId], references: [id])
+  proposals     Proposal[]
+  messages      Message[]
+  reviews       Review[]
+}
+
+model Proposal {
+  id              String          @id @default(uuid())
+  providerId      String
+  projectId       String
+  price           Int
+  duration        Int             // days
+  startDate       DateTime?       // when provider can start
+  comment         String?
+  status          ProposalStatus  @default(PENDING)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  // Relations
+  project         Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  provider        User            @relation("ProviderProposals", fields: [providerId], references: [id])
+  
+  @@unique([projectId, providerId])
+}
+
+model PortfolioItem {
+  id          String    @id @default(uuid())
+  providerId  String
+  title       String
+  description String?
+  imageUrl    String
+  category    String?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  
+  // Relations
+  provider    User      @relation(fields: [providerId], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id          String      @id @default(uuid())
+  senderId    String
+  receiverId  String
+  projectId   String?
+  content     String
+  isRead      Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  
+  // Relations
+  sender      User        @relation("MessageSender", fields: [senderId], references: [id])
+  receiver    User        @relation("MessageReceiver", fields: [receiverId], references: [id])
+  project     Project?    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id          String    @id @default(uuid())
+  projectId   String
+  reviewerId  String    // who gives the review
+  revieweeId  String    // who receives the review
+  rating      Int       // 1-5 stars
+  comment     String?
+  createdAt   DateTime  @default(now())
+  
+  // Relations
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reviewer    User      @relation("ReviewsGiven", fields: [reviewerId], references: [id])
+  reviewee    User      @relation("ReviewsReceived", fields: [revieweeId], references: [id])
+  
+  @@unique([projectId, reviewerId, revieweeId])
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  data      Json?            // Additional data as JSON
+  createdAt DateTime         @default(now())
+  
+  // Relations
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum Role {
+  CLIENT
+  PROVIDER
+}
+
+enum Priority {
+  PRICE
+  SPEED
+  EXPERIENCE
+}
+
+enum ProjectStatus {
+  WAITING     // 72h waiting period
+  ACTIVE      // Auction is live (24h)
+  COMPLETED   // Work finished
+  CANCELLED   // Cancelled by client
+  AWARDED     // Winner selected
+}
+
+enum AuctionPhase {
+  WAITING     // 72h waiting period before auction
+  ACTIVE      // 24h auction period
+  ENDED       // Auction ended, awaiting selection
+  AWARDED     // Winner selected
+  CANCELLED   // Cancelled
+}
+
+enum ProposalStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+enum NotificationType {
+  NEW_PROJECT
+  NEW_PROPOSAL
+  PROPOSAL_ACCEPTED
+  PROPOSAL_REJECTED
+  PROJECT_COMPLETED
+  NEW_MESSAGE
+  NEW_REVIEW
+}
