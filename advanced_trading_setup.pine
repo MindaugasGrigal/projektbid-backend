@@ -1,0 +1,448 @@
+//@version=5
+indicator("Advanced Trading Setup & Pattern Detection", overlay=true, max_labels_count=500, max_lines_count=500)
+
+// === INPUT GROUPS ===
+// Manual Trading Controls
+group_manual = "Manual Trading Setup"
+enableManual = input.bool(true, title="Enable Manual Trading", group=group_manual)
+manualEntry = input.float(0.0, title="Manual Entry Price", group=group_manual)
+manualSLInput = input.float(0.0, title="Manual Stop Loss", group=group_manual)
+manualTP1Input = input.float(0.0, title="Manual Take Profit 1", group=group_manual)
+manualTP2Input = input.float(0.0, title="Manual Take Profit 2", group=group_manual)
+manualTP3Input = input.float(0.0, title="Manual Take Profit 3 (Optional)", group=group_manual)
+manualDirection = input.string("Long", title="Manual Direction", options=["Long", "Short"], group=group_manual)
+positionSize = input.float(1.0, title="Position Size", minval=0.1, maxval=10.0, step=0.1, group=group_manual)
+
+// Auto Level Settings based on ATR
+group_auto = "Auto Level Settings"
+useAutoLevels = input.bool(false, title="Use ATR Based Levels", group=group_auto)
+atrPeriod = input.int(14, title="ATR Period", group=group_auto, minval=1)
+atrMultSL = input.float(1.5, title="ATR Multiplier for Stop", group=group_auto, step=0.1)
+rr1 = input.float(1.0, title="RR for TP1", group=group_auto, step=0.1)
+rr2 = input.float(2.0, title="RR for TP2", group=group_auto, step=0.1)
+rr3 = input.float(3.0, title="RR for TP3", group=group_auto, step=0.1)
+
+// Pattern Detection Settings
+group_patterns = "Pattern Detection"
+enablePatterns = input.bool(true, title="Enable Auto Pattern Detection", group=group_patterns)
+patternSensitivity = input.float(0.02, title="Pattern Sensitivity", minval=0.005, maxval=0.05, step=0.005, group=group_patterns)
+lookbackPeriod = input.int(20, title="Lookback Period", minval=10, maxval=50, group=group_patterns)
+minPatternHeight = input.float(1.5, title="Minimum Pattern Height (%)", minval=0.5, maxval=5.0, step=0.1, group=group_patterns)
+enableEngulf = input.bool(true, title="Detect Engulfing Patterns", group=group_patterns)
+
+// Risk Management
+group_risk = "Risk Management"
+autoRiskReward = input.bool(true, title="Auto Calculate Risk/Reward", group=group_risk)
+minRiskReward = input.float(1.5, title="Minimum Risk/Reward Ratio", minval=1.0, maxval=5.0, step=0.1, group=group_risk)
+maxRiskPercent = input.float(2.0, title="Max Risk Per Trade (%)", minval=0.5, maxval=10.0, step=0.1, group=group_risk)
+
+// Display Options
+group_display = "Display Options"
+showLabels = input.bool(true, title="Show Setup Labels", group=group_display)
+showLines = input.bool(true, title="Show Price Lines", group=group_display)
+showStats = input.bool(true, title="Show Statistics Table", group=group_display)
+labelSize = input.string("Small", title="Label Size", options=["Tiny", "Small", "Normal", "Large"], group=group_display)
+patternLabelMode = input.string("Summary", title="Pattern Labels", options=["None", "Summary", "Detailed"], group=group_display)
+
+// === ATR CALCULATIONS ===
+atrValue = ta.atr(atrPeriod)
+
+// Auto Level Calculations
+slFromATR = manualDirection == "Long" ? manualEntry - atrValue * atrMultSL : manualEntry + atrValue * atrMultSL
+defaultSL = useAutoLevels and manualSLInput == 0 ? slFromATR : manualSLInput
+
+riskPips = math.abs(manualEntry - defaultSL)
+
+calcTP(entry, sl, rr) =>
+    direction = manualDirection == "Long" ? 1 : -1
+    entry + direction * riskPips * rr
+
+defaultTP1 = manualTP1Input == 0 and useAutoLevels ? calcTP(manualEntry, defaultSL, rr1) : manualTP1Input
+defaultTP2 = manualTP2Input == 0 and useAutoLevels ? calcTP(manualEntry, defaultSL, rr2) : manualTP2Input
+defaultTP3 = manualTP3Input == 0 and useAutoLevels ? calcTP(manualEntry, defaultSL, rr3) : manualTP3Input
+
+// === ADVANCED PATTERN DETECTION ===
+// W Pattern Detection (Double Bottom)
+detectWPattern() =>
+    if not enablePatterns or bar_index < lookbackPeriod
+        false
+    else
+        lookback = lookbackPeriod
+        low1 = ta.lowest(low, lookback)
+        low1_bar = ta.barssince(low == low1)
+        if na(low1) or na(low1_bar) or low1_bar >= lookback - 10
+            false
+        else
+            low2 = low1
+            low2_bar = 0
+            startRange = low1_bar + 5
+            endRange = lookback - 5
+            if startRange < endRange
+                for i = startRange to endRange
+                    if not na(low[i]) and low[i] <= low2 * (1 + patternSensitivity) and low[i] >= low2 * (1 - patternSensitivity)
+                        low2 := low[i]
+                        low2_bar := i
+                        break
+            if low2_bar > 0 and not na(low1_bar) and not na(low2_bar)
+                maxBars = math.max(low1_bar, low2_bar)
+                if maxBars > 0 and maxBars <= lookback
+                    middleHigh = ta.highest(high, maxBars)
+                    if not na(middleHigh) and not na(low1) and not na(low2)
+                        minLow = math.min(low1, low2)
+                        if minLow > 0
+                            patternHeight = (middleHigh - minLow) / minLow * 100
+                            patternHeight >= minPatternHeight and middleHigh > math.max(low1, low2)
+                        else
+                            false
+                    else
+                        false
+                else
+                    false
+            else
+                false
+
+// M Pattern Detection (Double Top)
+detectMPattern() =>
+    if not enablePatterns or bar_index < lookbackPeriod
+        false
+    else
+        lookback = lookbackPeriod
+        high1 = ta.highest(high, lookback)
+        high1_bar = ta.barssince(high == high1)
+        if na(high1) or na(high1_bar) or high1_bar >= lookback - 10
+            false
+        else
+            high2 = high1
+            high2_bar = 0
+            startRange = high1_bar + 5
+            endRange = lookback - 5
+            if startRange < endRange
+                for i = startRange to endRange
+                    if not na(high[i]) and high[i] >= high2 * (1 - patternSensitivity) and high[i] <= high2 * (1 + patternSensitivity)
+                        high2 := high[i]
+                        high2_bar := i
+                        break
+            if high2_bar > 0 and not na(high1_bar) and not na(high2_bar)
+                maxBars = math.max(high1_bar, high2_bar)
+                if maxBars > 0 and maxBars <= lookback
+                    middleLow = ta.lowest(low, maxBars)
+                    if not na(middleLow) and not na(high1) and not na(high2)
+                        maxHigh = math.max(high1, high2)
+                        if middleLow > 0 and maxHigh > 0
+                            patternHeight = (maxHigh - middleLow) / middleLow * 100
+                            patternHeight >= minPatternHeight and middleLow < math.min(high1, high2)
+                        else
+                            false
+                    else
+                        false
+                else
+                    false
+            else
+                false
+
+// Engulfing Pattern Detection
+bullEngulf = enablePatterns and enableEngulf and close > open and close[1] < open[1] and close >= open[1] and open <= close[1]
+bearEngulf = enablePatterns and enableEngulf and close < open and close[1] > open[1] and open >= close[1] and close <= open[1]
+
+// Additional Pattern Detection
+detectPregnantPattern() =>
+    bull = enablePatterns and open[1] > close[1] and close > open and high < high[1] and low > low[1]
+    bear = enablePatterns and open[1] < close[1] and close < open and high < high[1] and low > low[1]
+    [bull, bear]
+
+detectEaglePattern() =>
+    bull = enablePatterns and ta.crossover(ta.ema(close, 5), ta.ema(close, 20))
+    bear = enablePatterns and ta.crossunder(ta.ema(close, 5), ta.ema(close, 20))
+    [bull, bear]
+
+detectCupHandlePattern() =>
+    if not enablePatterns or bar_index < lookbackPeriod
+        [false, false]
+    else
+        cupLow = ta.lowest(low, lookbackPeriod)
+        cupHigh = ta.highest(high, lookbackPeriod)
+        depth = (cupHigh - cupLow) / cupHigh * 100
+        handle = close > cupLow and close < cupHigh and close[1] < close
+        bull = depth >= minPatternHeight and handle
+        bear = depth >= minPatternHeight and close < cupHigh and close[1] > close
+        [bull, bear]
+
+detectFishingHookPattern() =>
+    body = math.abs(close - open)
+    lowerWick = open - low
+    upperWick = high - open
+    bull = enablePatterns and close > open and lowerWick > body * 2
+    bear = enablePatterns and close < open and upperWick > body * 2
+    [bull, bear]
+
+detectWishbonePattern() =>
+    bull = enablePatterns and low[2] < low[4] and low[2] < low and high[1] > high[2]
+    bear = enablePatterns and high[2] > high[4] and high[2] > high and low[1] < low[2]
+    [bull, bear]
+
+[pregBull, pregBear] = detectPregnantPattern()
+[eagleBull, eagleBear] = detectEaglePattern()
+[cupBull, cupBear] = detectCupHandlePattern()
+[hookBull, hookBear] = detectFishingHookPattern()
+[wishBull, wishBear] = detectWishbonePattern()
+
+validW = detectWPattern()
+validM = detectMPattern()
+
+// Momentum and volume measures
+momentum = ta.rsi(close, 14)
+volMA = ta.sma(volume, 20)
+liquiditySweepLong = high > ta.highest(high, 10)[1] and close < open
+liquiditySweepShort = low < ta.lowest(low, 10)[1] and close > open
+whaleMove = volume > volMA * 2 and (liquiditySweepLong or liquiditySweepShort)
+
+// Unified long/short pattern logic
+patternLong = validW or bullEngulf or pregBull or eagleBull or cupBull or hookBull or wishBull
+patternShort = validM or bearEngulf or pregBear or eagleBear or cupBear or hookBear or wishBear
+
+// Fakeout trap zones and bounce-back detection
+fakeoutLong = patternLong and low < ta.lowest(low, 5)[1] and close > open
+fakeoutShort = patternShort and high > ta.highest(high, 5)[1] and close < open
+
+// Early momentum bounce alerts
+momentumLong = patternLong and momentum > 55 and close > ta.sma(close, 20)
+momentumShort = patternShort and momentum < 45 and close < ta.sma(close, 20)
+
+// === SETUP LOGIC ===
+isManual = enableManual and not na(manualEntry) and not na(defaultSL)
+isManualValid = isManual and manualEntry != defaultSL
+isManualLong = isManualValid and manualDirection == 'Long'
+isManualShort = isManualValid and manualDirection == 'Short'
+
+tp2Dyn = defaultTP2
+tp3Dyn = defaultTP3
+if isManualValid and autoRiskReward
+    if manualDirection == 'Long' and close > defaultTP1
+        tp2Dyn += atrValue
+        tp3Dyn += atrValue * 1.5
+    if manualDirection == 'Short' and close < defaultTP1
+        tp2Dyn -= atrValue
+        tp3Dyn -= atrValue * 1.5
+
+rrManual = isManualValid ? math.abs((defaultTP1 - manualEntry) / (manualEntry - defaultSL)) : na
+rr2Manual = isManualValid and not na(tp2Dyn) ? math.abs((tp2Dyn - manualEntry) / (manualEntry - defaultSL)) : na
+rr3Manual = isManualValid and not na(tp3Dyn) ? math.abs((tp3Dyn - manualEntry) / (manualEntry - defaultSL)) : na
+
+riskValid = not autoRiskReward or (not na(rrManual) and rrManual >= minRiskReward)
+
+accountBalance = 10000
+riskAmount = accountBalance * (maxRiskPercent / 100)
+stopDistance = math.abs(manualEntry - defaultSL)
+positionSizeCalc = isManualValid and stopDistance > 0 ? riskAmount / stopDistance : na
+
+calcConfidence() =>
+    baseConf = 50.0
+    rrFactor = isManualValid and not na(rrManual) ? math.max(math.min((rrManual - minRiskReward) / minRiskReward, 1), -1) : 0
+    conf = baseConf + rrFactor * 30
+    if enablePatterns and isManualValid
+        patternMatch = (manualDirection == 'Long' and patternLong) or (manualDirection == 'Short' and patternShort)
+        conf += patternMatch ? 20 : -20
+    if whaleMove
+        conf += 10
+    math.max(math.min(conf, 100), 0)
+
+confidence = calcConfidence()
+
+// === PLOTTING ===
+entryColor = isManualLong ? color.new(color.blue, 0) : color.new(color.orange, 0)
+slColor = color.new(color.red, 0)
+tp1Color = color.new(color.green, 20)
+tp2Color = color.new(color.green, 0)
+tp3Color = color.new(color.lime, 0)
+
+plot(showLines and isManualValid ? manualEntry : na, title="Entry", color=entryColor, linewidth=2)
+plot(showLines and isManualValid ? defaultSL : na, title="Stop Loss", color=slColor, linewidth=2)
+plot(showLines and isManualValid and not na(defaultTP1) ? defaultTP1 : na, title="TP1", color=tp1Color, linewidth=1)
+plot(showLines and isManualValid and not na(tp2Dyn) ? tp2Dyn : na, title="TP2", color=tp2Color, linewidth=1)
+plot(showLines and isManualValid and not na(tp3Dyn) ? tp3Dyn : na, title="TP3", color=tp3Color, linewidth=1)
+
+entryZoneUpper = isManualLong ? manualEntry * 1.002 : manualEntry * 0.998
+entryZoneLower = isManualLong ? manualEntry * 0.998 : manualEntry * 1.002
+plot1 = plot(showLines and isManualValid ? manualEntry : na, display=display.none)
+plot2 = plot(showLines and isManualValid ? entryZoneUpper : na, display=display.none)
+fill(plot1, plot2, color=color.new(entryColor, 90), title="Entry Zone")
+
+// === LABELS AND ANNOTATIONS ===
+labelSizeConst = switch labelSize
+    "Tiny" => size.tiny
+    "Small" => size.small
+    "Normal" => size.normal
+    "Large" => size.large
+    => size.small
+
+if showLabels and isManualValid and riskValid
+    setupTitle = manualDirection == 'Long' ? 'LONG' : 'SHORT'
+    labelText = setupTitle +
+              ' E:' + str.tostring(manualEntry, '#.####') +
+              ' SL:' + str.tostring(defaultSL, '#.####') +
+              ' TP1:' + str.tostring(defaultTP1, '#.####') +
+              (not na(tp2Dyn) ? ' TP2:' + str.tostring(tp2Dyn, '#.####') : '') +
+              (not na(tp3Dyn) ? ' TP3:' + str.tostring(tp3Dyn, '#.####') : '') +
+              ' RR:' + str.tostring(rrManual, '#.##') +
+              (not na(rr2Manual) ? '/' + str.tostring(rr2Manual, '#.##') : '') +
+              (not na(rr3Manual) ? '/' + str.tostring(rr3Manual, '#.##') : '') +
+              ' Conf:' + str.tostring(confidence, '#.##') + '%'
+    labelColor = riskValid ? (manualDirection == 'Long' ? color.new(color.green, 20) : color.new(color.red, 20)) : color.new(color.gray, 20)
+    label.new(bar_index, manualEntry, labelText, style=label.style_label_left, color=labelColor, textcolor=color.white, size=labelSizeConst)
+
+if enablePatterns and showLabels and patternLabelMode != 'None'
+    if patternLabelMode == 'Detailed'
+        if validW
+            label.new(bar_index, low, '🔵 W PATTERN\nDouble Bottom Detected\nBullish Signal', style=label.style_label_up, color=color.new(color.blue, 20), textcolor=color.white, size=labelSizeConst)
+        if validM
+            label.new(bar_index, high, '🔴 M PATTERN\nDouble Top Detected\nBearish Signal', style=label.style_label_down, color=color.new(color.red, 20), textcolor=color.white, size=labelSizeConst)
+        if bullEngulf
+            label.new(bar_index, low, '🟢 Bullish Engulfing', style=label.style_label_up, color=color.new(color.green, 20), textcolor=color.white, size=labelSizeConst)
+        if bearEngulf
+            label.new(bar_index, high, '🔻 Bearish Engulfing', style=label.style_label_down, color=color.new(color.orange, 20), textcolor=color.white, size=labelSizeConst)
+        if eagleBull
+            label.new(bar_index, low, 'EAGLE BULL', style=label.style_label_up, color=color.new(color.blue, 20), textcolor=color.white, size=labelSizeConst)
+        if eagleBear
+            label.new(bar_index, high, 'EAGLE BEAR', style=label.style_label_down, color=color.new(color.blue, 20), textcolor=color.white, size=labelSizeConst)
+        if pregBull
+            label.new(bar_index, low, 'PREGNANT BULL', style=label.style_label_up, color=color.new(color.purple, 20), textcolor=color.white, size=labelSizeConst)
+        if pregBear
+            label.new(bar_index, high, 'PREGNANT BEAR', style=label.style_label_down, color=color.new(color.purple, 20), textcolor=color.white, size=labelSizeConst)
+        if cupBull
+            label.new(bar_index, low, 'CUP&HANDLE BULL', style=label.style_label_up, color=color.new(color.teal, 20), textcolor=color.white, size=labelSizeConst)
+        if cupBear
+            label.new(bar_index, high, 'CUP&HANDLE BEAR', style=label.style_label_down, color=color.new(color.teal, 20), textcolor=color.white, size=labelSizeConst)
+        if hookBull
+            label.new(bar_index, low, 'HOOK BULL', style=label.style_label_up, color=color.new(color.yellow, 20), textcolor=color.white, size=labelSizeConst)
+        if hookBear
+            label.new(bar_index, high, 'HOOK BEAR', style=label.style_label_down, color=color.new(color.yellow, 20), textcolor=color.white, size=labelSizeConst)
+        if wishBull
+            label.new(bar_index, low, 'WISHBONE BULL', style=label.style_label_up, color=color.new(color.gray, 20), textcolor=color.white, size=labelSizeConst)
+        if wishBear
+            label.new(bar_index, high, 'WISHBONE BEAR', style=label.style_label_down, color=color.new(color.gray, 20), textcolor=color.white, size=labelSizeConst)
+    else
+        bullNames = array.new_string()
+        bearNames = array.new_string()
+        if validW
+            array.push(bullNames, 'W')
+        if bullEngulf
+            array.push(bullNames, 'Engulf')
+        if eagleBull
+            array.push(bullNames, 'Eagle')
+        if pregBull
+            array.push(bullNames, 'Pregnant')
+        if cupBull
+            array.push(bullNames, 'Cup&Handle')
+        if hookBull
+            array.push(bullNames, 'Hook')
+        if wishBull
+            array.push(bullNames, 'Wishbone')
+        if validM
+            array.push(bearNames, 'M')
+        if bearEngulf
+            array.push(bearNames, 'Engulf')
+        if eagleBear
+            array.push(bearNames, 'Eagle')
+        if pregBear
+            array.push(bearNames, 'Pregnant')
+        if cupBear
+            array.push(bearNames, 'Cup&Handle')
+        if hookBear
+            array.push(bearNames, 'Hook')
+        if wishBear
+            array.push(bearNames, 'Wishbone')
+        if array.size(bullNames) > 0
+            bullText = array.get(bullNames, 0)
+            for i = 1 to array.size(bullNames) - 1
+                bullText += ', ' + array.get(bullNames, i)
+            label.new(bar_index, low, bullText, style=label.style_label_up, color=color.new(color.green, 20), textcolor=color.white, size=labelSizeConst)
+        if array.size(bearNames) > 0
+            bearText = array.get(bearNames, 0)
+            for i = 1 to array.size(bearNames) - 1
+                bearText += ', ' + array.get(bearNames, i)
+            label.new(bar_index, high, bearText, style=label.style_label_down, color=color.new(color.red, 20), textcolor=color.white, size=labelSizeConst)
+
+// === STATISTICS TABLE ===
+if showStats and (isManualValid or enablePatterns)
+    var table statsTable = table.new(position.top_right, 2, 16, bgcolor=color.new(color.white, 80), border_width=1)
+    if barstate.islast
+        table.cell(statsTable, 0, 0, "Metric", bgcolor=color.new(color.blue, 70), text_color=color.white, text_size=size.small)
+        table.cell(statsTable, 1, 0, "Value", bgcolor=color.new(color.blue, 70), text_color=color.white, text_size=size.small)
+        row = 1
+        if isManualValid
+            table.cell(statsTable, 0, row, "Setup Type", text_size=size.small)
+            table.cell(statsTable, 1, row, manualDirection, text_color=manualDirection == "Long" ? color.green : color.red, text_size=size.small)
+            row += 1
+            table.cell(statsTable, 0, row, "Risk/Reward", text_size=size.small)
+            table.cell(statsTable, 1, row, str.tostring(rrManual, '#.##'), text_color=rrManual >= minRiskReward ? color.green : color.red, text_size=size.small)
+            row += 1
+            table.cell(statsTable, 0, row, "Confidence", text_size=size.small)
+            confidenceColor = confidence >= 80 ? color.green : confidence >= 60 ? color.orange : color.red
+            table.cell(statsTable, 1, row, str.tostring(confidence, '#.#') + "%", text_color=confidenceColor, text_size=size.small)
+            row += 1
+            if autoRiskReward and not na(positionSizeCalc)
+                table.cell(statsTable, 0, row, "Position Size", text_size=size.small)
+                table.cell(statsTable, 1, row, str.tostring(positionSizeCalc, '#.##'), text_size=size.small)
+                row += 1
+        if enablePatterns
+            table.cell(statsTable, 0, row, "W Pattern", text_size=size.small)
+            table.cell(statsTable, 1, row, validW ? "✓" : "✗", text_color=validW ? color.green : color.gray, text_size=size.small)
+            row += 1
+            table.cell(statsTable, 0, row, "M Pattern", text_size=size.small)
+            table.cell(statsTable, 1, row, validM ? "✓" : "✗", text_color=validM ? color.green : color.gray, text_size=size.small)
+            row += 1
+            table.cell(statsTable, 0, row, "Bull Engulf", text_size=size.small)
+            table.cell(statsTable, 1, row, bullEngulf ? "✓" : "✗", text_color=bullEngulf ? color.green : color.gray, text_size=size.small)
+            row += 1
+            table.cell(statsTable, 0, row, "Bear Engulf", text_size=size.small)
+            table.cell(statsTable, 1, row, bearEngulf ? "✓" : "✗", text_color=bearEngulf ? color.green : color.gray, text_size=size.small)
+            row += 1
+            table.cell(statsTable, 0, row, "Eagle", text_size=size.small)
+            table.cell(statsTable, 1, row, (eagleBull or eagleBear) ? "✓" : "✗", text_color=(eagleBull or eagleBear) ? color.green : color.gray, text_size=size.small)
+            row += 1
+            table.cell(statsTable, 0, row, "Pregnant", text_size=size.small)
+            table.cell(statsTable, 1, row, (pregBull or pregBear) ? "✓" : "✗", text_color=(pregBull or pregBear) ? color.green : color.gray, text_size=size.small)
+            row += 1
+            table.cell(statsTable, 0, row, "CupHandle", text_size=size.small)
+            table.cell(statsTable, 1, row, (cupBull or cupBear) ? "✓" : "✗", text_color=(cupBull or cupBear) ? color.green : color.gray, text_size=size.small)
+            row += 1
+            table.cell(statsTable, 0, row, "Hook", text_size=size.small)
+            table.cell(statsTable, 1, row, (hookBull or hookBear) ? "✓" : "✗", text_color=(hookBull or hookBear) ? color.green : color.gray, text_size=size.small)
+            row += 1
+            table.cell(statsTable, 0, row, "Wishbone", text_size=size.small)
+            table.cell(statsTable, 1, row, (wishBull or wishBear) ? "✓" : "✗", text_color=(wishBull or wishBear) ? color.green : color.gray, text_size=size.small)
+            row += 1
+            table.cell(statsTable, 0, row, "Whale Move", text_size=size.small)
+            table.cell(statsTable, 1, row, whaleMove ? "✓" : "✗", text_color=whaleMove ? color.green : color.gray, text_size=size.small)
+
+// === ENHANCED ALERTS ===
+alertcondition(validW, title="🔵 W Pattern Detected", message="🔵 W PATTERN CONFIRMED!\nEntry: {{close}}\nSL zone: {{low}}\nTP zone: {{high}}\nFakeout watch")
+alertcondition(validM, title="🔴 M Pattern Detected", message="🔴 M PATTERN CONFIRMED!\nEntry: {{close}}\nSL zone: {{high}}\nTP zone: {{low}}\nFakeout watch")
+alertcondition(bullEngulf, title="🟢 Bullish Engulfing", message="🟢 BULLISH ENGULFING!\nEntry: {{close}}\nReversal signal")
+alertcondition(bearEngulf, title="🔻 Bearish Engulfing", message="🔻 BEARISH ENGULFING!\nEntry: {{close}}\nReversal signal")
+alertcondition(eagleBull, title="🦅 Bullish Eagle", message="🦅 EAGLE BULLISH!\nEntry: {{close}}")
+alertcondition(eagleBear, title="🦅 Bearish Eagle", message="🦅 EAGLE BEARISH!\nEntry: {{close}}")
+alertcondition(pregBull, title="🤰 Bullish Pregnant", message="🤰 PREGNANT WOMAN BULLISH!\nEntry: {{close}}")
+alertcondition(pregBear, title="🤰 Bearish Pregnant", message="🤰 PREGNANT WOMAN BEARISH!\nEntry: {{close}}")
+alertcondition(cupBull, title="☕ Cup & Handle Bull", message="☕ CUP & HANDLE BULLISH!\nEntry: {{close}}")
+alertcondition(cupBear, title="☕ Cup & Handle Bear", message="☕ CUP & HANDLE BEARISH!\nEntry: {{close}}")
+alertcondition(hookBull, title="🎣 Fishing Hook Bull", message="🎣 FISHING HOOK BULLISH!\nEntry: {{close}}")
+alertcondition(hookBear, title="🎣 Fishing Hook Bear", message="🎣 FISHING HOOK BEARISH!\nEntry: {{close}}")
+alertcondition(wishBull, title="🦴 Wishbone Bull", message="🦴 WISHBONE BULLISH!\nEntry: {{close}}")
+alertcondition(wishBear, title="🦴 Wishbone Bear", message="🦴 WISHBONE BEARISH!\nEntry: {{close}}")
+alertcondition(fakeoutLong, title="⚠️ Long Fakeout Trap", message="⚠️ LONG FAKEOUT TRAP!\nWatch bounce-back potential")
+alertcondition(fakeoutShort, title="⚠️ Short Fakeout Trap", message="⚠️ SHORT FAKEOUT TRAP!\nWatch bounce-back potential")
+alertcondition(momentumLong, title="🚀 Early Long Momentum", message="🚀 EARLY LONG MOMENTUM!\nMomentum and bounce zone align")
+alertcondition(momentumShort, title="📉 Early Short Momentum", message="📉 EARLY SHORT MOMENTUM!\nMomentum and bounce zone align")
+
+manualEntryTouch = isManualValid and ((close >= manualEntry and manualDirection == 'Long') or (close <= manualEntry and manualDirection == 'Short'))
+manualTP1Touch = isManualValid and not na(defaultTP1) and ((manualDirection == 'Long' and close >= defaultTP1) or (manualDirection == 'Short' and close <= defaultTP1))
+manualTP2Touch = isManualValid and not na(tp2Dyn) and ((manualDirection == 'Long' and close >= tp2Dyn) or (manualDirection == 'Short' and close <= tp2Dyn))
+manualTP3Touch = isManualValid and not na(tp3Dyn) and ((manualDirection == 'Long' and close >= tp3Dyn) or (manualDirection == 'Short' and close <= tp3Dyn))
+manualSLTouch = isManualValid and ((manualDirection == 'Long' and close <= defaultSL) or (manualDirection == 'Short' and close >= defaultSL))
+
+alertcondition(manualEntryTouch, title="📌 Manual Entry Hit", message="📌 ENTRY TRIGGERED!\n📊 Symbol: {{ticker}}\n💰 Current Price: {{close}}\n⏰ Time: {{time}}\n🎯 Entry level reached")
+alertcondition(manualTP1Touch, title="✅ TP1 Achieved", message="✅ TAKE PROFIT 1 HIT!\n📊 Symbol: {{ticker}}\n💰 Current Price: {{close}}\n⏰ Time: {{time}}\n🎉 First target achieved!")
+alertcondition(manualTP2Touch, title="🎯 TP2 Achieved", message="🎯 TAKE PROFIT 2 HIT!\n📊 Symbol: {{ticker}}\n💰 Current Price: {{close}}\n⏰ Time: {{time}}\n🚀 Second target achieved!")
+alertcondition(manualTP3Touch, title="🏆 TP3 Achieved", message="🏆 TAKE PROFIT 3 HIT!\n📊 Symbol: {{ticker}}\n💰 Current Price: {{close}}\n⏰ Time: {{time}}\n💎 Final target achieved!")
+alertcondition(manualSLTouch, title="🛑 Stop Loss Hit", message="🛑 STOP LOSS TRIGGERED!\n📊 Symbol: {{ticker}}\n💰 Current Price: {{close}}\n⏰ Time: {{time}}\n⚠️ Risk management activated")
